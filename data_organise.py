@@ -2,13 +2,13 @@ import pandas as pd
 import pathlib
 
 if __name__ == '__main__':
-    base_path = pathlib.Path("data")
+    BASE_PATH = pathlib.Path("data")
     train_or_valid = "valid"
     input_file = f"{train_or_valid}_gt.csv"
     output_file = f"{train_or_valid}_gt_int.csv"
-    output_labels_path = pathlib.Path(base_path, train_or_valid)
-    input_file_path = pathlib.Path(base_path, f"{train_or_valid}_gt/{input_file}")
-    output_file_path = pathlib.Path(base_path, f"{train_or_valid}_gt/{output_file}")
+    output_labels_path = pathlib.Path(BASE_PATH, train_or_valid)
+    input_file_path = pathlib.Path(BASE_PATH, f"{train_or_valid}_gt/{input_file}")
+    output_file_path = pathlib.Path(BASE_PATH, f"{train_or_valid}_gt/{output_file}")
     data_df = pd.read_csv(input_file_path)
     if output_file_path.is_file():
         print(f"already converted {input_file} to int")
