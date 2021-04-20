@@ -1,5 +1,6 @@
 import pandas as pd
 import pathlib
+from face_preprocessing.align import FaceAligner
 
 if __name__ == '__main__':
     BASE_PATH = pathlib.Path("data")
