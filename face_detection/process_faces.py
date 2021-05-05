@@ -12,6 +12,11 @@ import os
 
 
 def prepare_dir_for_alignment(image_dir):
+    """
+    Splits a directory into smaller chunks to ease processing
+    :param image_dir: root directory of images to split
+    :return: path to the created dir
+    """
     Path(PROCESS_PATH, Path(f"image_split_{image_dir.name}")).mkdir(exist_ok=True, parents=True)
     folder_size = 2005
     images = []
@@ -35,6 +40,12 @@ def prepare_dir_for_alignment(image_dir):
 
 
 def align_dir(image_dir):
+    """
+    Aligns images in a directory
+
+    :param image_dir: directory of images to align
+    :return: void
+    """
     retry_count = 3
     has_subfolders = False
     align = FaceAligner(True)
@@ -65,6 +76,12 @@ def align_dir(image_dir):
 
 
 def align_images(image):
+    """
+    Aligns a single image and writes it to a dir
+    :param image: the image to align
+    :return: void
+    """
+
     align = FaceAligner(gpu=True)
     im = cv2.imread(str(image), cv2.IMREAD_UNCHANGED)
     new_im = align(im)
@@ -76,6 +93,12 @@ def align_images(image):
 
 
 def dlib_face_detector(images, retry):
+    """
+    Applies the dlib CNN based face detector on a batch of images
+    :param images: a batch of images
+    :param retry: amount of times to retry if detection fails
+    :return: A list of the images where detection failed
+    """
     error_list = []
     image_back = images
     print(images)
@@ -83,6 +106,7 @@ def dlib_face_detector(images, retry):
     resized_faces = [cv2.resize(cv2.imread(str(image), cv2.IMREAD_UNCHANGED)[..., ::-1], dsize=(299, 299)) for image in
                      images]
     print("Getting face locations")
+    # could increase batch size to speed up processing
     face_locations = face_recognition.batch_face_locations(resized_faces, batch_size=64)
     for i in range(len(resized_faces)):
         print(f"resized_faces {len(resized_faces)}")
@@ -94,13 +118,16 @@ def dlib_face_detector(images, retry):
             Path(PROCESS_PATH, Path(images[i].parent.name), "retry").mkdir(exist_ok=True, parents=True)
             pil_image.save(Path(PROCESS_PATH, Path(images[i].parent.name), Path("retry"), Path(images[i].name)))
         else:
+            # bounding box regions
             print(face_locations[i][0])
+            # get the bounding box
             top, right, bottom, left = face_locations[i][0]
             image = resized_faces[i]
             Path(PROCESS_PATH, Path(images[i].parent.name), "loose_crop").mkdir(exist_ok=True, parents=True)
             Path(PROCESS_PATH, Path(images[i].parent.name), "very_loose_crop_crop").mkdir(exist_ok=True, parents=True)
             try:
                 try:
+                    # produce the crops
                     loose_crop = image[top - int((top / 1.5)):bottom + int((top / 1.5)),
                                  left - int((top / 1.5)):right + int((top / 1.5))]
                     loose_crop = Image.fromarray(loose_crop)
@@ -137,6 +164,13 @@ def dlib_face_detector(images, retry):
 
 
 def single_dlib_face_detector(img, mode):
+    """
+    Applies the CNN based dlib face detector on a single image
+
+    :param img: img to crop
+    :param mode: determines saved location
+    :return: error list if the face detection fails
+    """
     print(img.name)
     error_list = []
     image = face_recognition.load_image_file(img)
@@ -206,23 +240,6 @@ def single_dlib_face_detector(img, mode):
                 pil_image = Image.fromarray(img)
                 Path(PROCESS_PATH, Path(img.parent.name), "retry").mkdir(exist_ok=True, parents=True)
                 pil_image.save(Path(PROCESS_PATH, Path(img.parent.name), Path("retry"), Path(img.name)))
-            # show rectangles
-            # image = cv2.rectangle(image, (left, top), (right, bottom), (255, 0, 0), 5)
-            # image = cv2.rectangle(image, (left - int((top / 2)), top - int((top / 2))),
-            #                       (right + int((top / 2)), bottom + int((top / 2))), (0, 255, 0), 5)
-            # image = cv2.rectangle(image, (left - int((top / 6)), top - int((top / 6))),
-            #                       (right + int((top / 6)), bottom + int((top / 6))), (0, 0, 255), 5)
-            # plt.imshow(image)
-            # plt.show()
-            # pil_image = Image.fromarray(loose_crop)
-            # if 'class' in mode:
-            #     Path(PROCESS_PATH, img.parent.parent.name, img.parent.name).mkdir(exist_ok=True, parents=True)
-            #     process_train_path = Path(PROCESS_PATH, img.parent.parent.name, img.parent.name)
-            #     pil_image.save(Path(process_train_path, Path(img.name)))
-            # else:
-            #     # Path(PROCESS_PATH, img.parent.parent.name, img.parent.name).mkdir(exist_ok=True, parents=True)
-            #     # process_train_path = Path(PROCESS_PATH, img.parent.parent.name, img.parent.name)
-            #     pil_image.save(Path(TESTING_DATA, "result2.jpg"))
 
     except Exception as e:
         print(e)
@@ -258,54 +275,53 @@ if __name__ == '__main__':
     print(VALID_DATA)
     print(IMDB_WIKI_DATA)
 
-    # for age_folder in tqdm(TESTING_DATA.iterdir()):
-    #     print(f"Cropping images of {age_folder.stem} year olds")
-    #     if age_folder.is_file():
-    #         errors.extend(single_dlib_face_detector(age_folder, "regression"))
-    #
-    # batch = 34
-    # images = []
-    # for image in TRAIN_DATA.iterdir():
-    #     if image.is_file() and image.suffix != '.csv':
-    #         images.append(image)
-    #     if len(images) > batch:
-    #         print("Running batch")
-    #         errors.extend(dlib_face_detector(images, False))
-    #         print("batch complete")
-    #         images = []
-    #     else:
-    #         print(len(images))
-    # count = 0
-    #
-    # batch = 79
-    # images = []
-    # for image in VALID_DATA.iterdir():
-    #     if image.is_file() and image.suffix != '.csv':
-    #         images.append(image)
-    #     if len(images) > batch:
-    #         print("Running batch")
-    #         errors.extend(dlib_face_detector(images, False))
-    #         print("batch complete")
-    #         images = []
-    #     else:
-    #         print(len(images))
-    # count = 0
+    for age_folder in tqdm(TESTING_DATA.iterdir()):
+        print(f"Cropping images of {age_folder.stem} year olds")
+        if age_folder.is_file():
+            errors.extend(single_dlib_face_detector(age_folder, "regression"))
 
-    # for age_folder in tqdm(VALID_DATA.iterdir()):
-    #     print(f"Cropping images of {age_folder.stem} year olds")
-    #     if age_folder.is_file():
-    #         errors.extend(single_dlib_face_detector(age_folder, "regression"))
+    batch_size = 64
+    images = []
+    for image in TRAIN_DATA.iterdir():
+        if image.is_file() and image.suffix != '.csv':
+            images.append(image)
+        if len(images) > batch_size:
+            print("Running batch")
+            errors.extend(dlib_face_detector(images, False))
+            print("batch complete")
+            images = []
+        else:
+            print(len(images))
+    count = 0
 
-    # for image in Path(PROCESS_PATH, 'imdb_wiki_processed').iterdir():
-    #     print(f"Aligning image {count}")
-    #     print(f"File name {image.name}")
-    #     align_images(image)
-    #     count += 1
-    #
+    images = []
+    for image in VALID_DATA.iterdir():
+        if image.is_file() and image.suffix != '.csv':
+            images.append(image)
+        if len(images) > batch_size:
+            print("Running batch")
+            errors.extend(dlib_face_detector(images, False))
+            print("batch complete")
+            images = []
+        else:
+            print(len(images))
+    count = 0
+
+    for age_folder in tqdm(VALID_DATA.iterdir()):
+        print(f"Cropping images of {age_folder.stem} year olds")
+        if age_folder.is_file():
+            errors.extend(single_dlib_face_detector(age_folder, "regression"))
+
+    for image in Path(PROCESS_PATH, 'imdb_wiki_processed').iterdir():
+        print(f"Aligning image {count}")
+        print(f"File name {image.name}")
+        align_images(image)
+        count += 1
+
     print("aligning image dir")
-    # prepare_dir_for_alignment(Path(IMDB_WIKI_DATA))
-    align_dir(Path(TESTING_DATA))
-    #
-    # print("errors")
-    # print(errors)
-    # print(len(errors))
+    prepare_dir_for_alignment(Path(IMDB_WIKI_DATA))
+    align_dir(Path(IMDB_WIKI_DATA))
+
+    print("Errors")
+    print(errors)
+    print(len(errors))
