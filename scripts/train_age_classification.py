@@ -20,18 +20,24 @@ from tf_explain.core import OcclusionSensitivity
 
 
 def get_param_args():
+    """
+    Retrieves the command line arguments (or default values) to modify model training
+    :return: An object containing the command line arguments
+    """
     parser = argparse.ArgumentParser(description='Pass hyperparameter arguments')
-    parser.add_argument("--b", default=128, help="This is the batch size")
-    parser.add_argument("--layers", default=0, help="This is the trainable layers")
+    parser.add_argument("--b", default=256, help="This is the batch size")
+    parser.add_argument("--layers", default=8, help="This is the trainable layers")
     parser.add_argument("--lr", default=0.0001, help="This is the learning rate")
     parser.add_argument("--type", default='VGG16', help="This is the model architecture (VGG16 or VGGFACE)")
-    parser.add_argument("--mode", default="finetune", help="Pass 'finetune' for ChaLearn training or 'pretrain for IMDB-wiki")
+    parser.add_argument("--mode", default="finetune",
+                        help="Pass 'finetune' for ChaLearn training or 'pretrain for IMDB-wiki")
     args = parser.parse_args()
 
     if is_valid_arch(args.type) and is_valid_training_strategy(args.mode):
         return args
     else:
         return None
+
 
 def is_valid_arch(arch_type):
     """
@@ -44,18 +50,27 @@ def is_valid_arch(arch_type):
         raise ValueError("'type' must be one of %r." % valid_types)
     return True
 
+
 def is_valid_training_strategy(training_mode):
     """
     Checks if either IMDB-Wiki (pre-train) or ChaLearn is selected (finetune_
-    :param model_type: A (string) type of training
-    :return: True is training_mode is valid else raises an error
+    :param training_mode: A (string) type of training
+    :return: True if training_mode is valid else raises an error
     """
     valid_types = {'finetune', 'pretrain'}
     if training_mode not in valid_types:
         raise ValueError("'mode' must be one of %r." % valid_types)
     return True
 
-def visualise_age_distribtion(dataset, mode):
+
+def visualise_age_distribution(dataset, mode):
+    """
+    Visualises the age distribution through creating a histogram with Pands
+
+    :param dataset: data to visualise
+    :param mode: determines if the IMDb-wiki data should be visualised or the Chalearn data
+    :return: void
+    """
     if mode == 'pretrain':
         dataset = dataset.astype({"age": 'int'})
         print(dataset)
@@ -72,6 +87,12 @@ def visualise_age_distribtion(dataset, mode):
 
 
 def load_data(mode):
+    """
+    Loads the datasets from .csv files into pandas for processing and cleaning
+
+    :param mode: determines if the IMDb-wiki data should be converted or the Chalearn data
+    :return: pandas dataframe containing train and validation data
+    """
     if mode == 'pretrain':
         if Path('imdb_wiki_data.pkl').is_file():
             print("Reading in data!")
@@ -80,9 +101,9 @@ def load_data(mode):
         else:
             BASE_LABEL_PATH = Path("../data/imdb_wiki_processed")
             BASE_IMAGE_PATH = Path('../data/process_new/imdb_wiki_processed/loose_crop')
-            result = pd.read_csv(BASE_PATH / 'imdb_wiki_labels_t60.csv')
-            result = labels.astype({"image": 'string'})
-            result["imagepath"] = str(BASE_IMAGE_PATH) + "/" + labels['image']
+            result = pd.read_csv(BASE_LABEL_PATH / 'imdb_wiki_labels_t60.csv')
+            result = result.astype({"image": 'string'})
+            result["imagepath"] = str(BASE_IMAGE_PATH) + "/" + result['image']
             result = result.dropna()
             return result
     else:
@@ -109,7 +130,13 @@ def load_data(mode):
 
 
 def img_to_raw_pixels(file_path):
+    """
+    Loads each image in PIL format, pre-processes this input for VGG16 and converts it to a NumPy representation
+    :param file_path: path to the image
+    :return: NumPy array representation of image
+    """
     try:
+        # loads image with correct shape for VGG16 input
         img = image.load_img(file_path, grayscale=False, target_size=(224, 224))
     except:
         return None
@@ -117,7 +144,16 @@ def img_to_raw_pixels(file_path):
     x = image.img_to_array(img)
     return x
 
+
 def create_train_test_data(dataset, mode, test_ratio):
+    """
+    Creates NumPy arrays for train/test data and corresponding labels from the pandas dataframes
+
+    :param dataset: pandas dataframe containing train and validation data
+    :param mode: determines if the IMDb-wiki data should be converted or the Chalearn data
+    :param test_ratio: split of train to validation data
+    :return: NumPy tuples of train and valid data along with labels
+    """
     dataset['image_pixels'] = dataset['imagepath'].apply(img_to_raw_pixels)
     # raw_dataset = raw_dataset.dropna()
     print(dataset)
@@ -146,6 +182,7 @@ def create_train_test_data(dataset, mode, test_ratio):
     # produce a train/test data split using the test_ratio
     return train_test_split(features, target_classes, test_size=test_ratio)
 
+
 def age_mae(y_true, y_pred):
     """
     Custom DEX Mean Absolute Error metric using the expected value formation
@@ -161,8 +198,13 @@ def age_mae(y_true, y_pred):
     return mae
 
 
-def construct_model(type):
-    if type == 'VGG16':
+def construct_model(arch):
+    """
+    Constructs and returns a Keras Sequential Model instance
+    :param arch: architecture to construct
+    :return: Keras Sequential model
+    """
+    if arch == 'VGG16':
         vgg16_model = VGG16(weights='aug_loose_cropped_class_model.07-3.53.h5', classes=102)
         vgg16_model.summary()
         model = keras.Sequential()
@@ -188,7 +230,7 @@ def construct_model(type):
             print(f"{layer}: {layer.trainable}")
         print(model.summary())
         return model
-    elif type == 'VGGFACE':
+    elif arch == 'VGGFACE':
         # https://medium.com/analytics-vidhya/face-recognition-with-vgg-face-in-keras-96e6bc1951d5
         vggface = tf.keras.models.Sequential()
         vggface.add(ZeroPadding2D((1, 1), input_shape=(224, 224, 3)))
@@ -242,24 +284,31 @@ def construct_model(type):
         vggface.pop()
         vggface.add(Flatten())
         vggface.add(Dense(units=102, activation='softmax'))
-        for layer in vvgface.layers:
+        for layer in vggface.layers:
             layer.trainable = False
         # Set the last 8 layers to be trainable
-        for layer in vvgface.layers[14:]:
+        for layer in vggface.layers[14:]:
             layer.trainable = True
             print(f"{layer}: {layer.trainable}")
-        print(vvgface.summary())
+        print(vggface.summary())
         return vggface
     else:
         return None
 
+
 def create_checkpoint_callback():
+    """
+    Creates a checkpoint, to save the best weights found during training
+
+    :return: Keras model checkpoint callback
+    """
     return tf.keras.callbacks.ModelCheckpoint(
         filepath='aug_final_loose_cropped_class_model.{epoch:02d}-{val_loss:.2f}.h5',
         save_weights_only=True,
         monitor='val_age_mae',
         mode='min',
         save_best_only=True)
+
 
 if __name__ == '__main__':
     args = get_param_args()
@@ -276,7 +325,7 @@ if __name__ == '__main__':
 
     raw_dataset = load_data(args.mode)
     print(raw_dataset)
-    visualise_age_distribtion(raw_dataset, args.mode)
+    visualise_age_distribution(raw_dataset, args.mode)
 
     train_x, val_x, train_y, val_y = create_train_test_data(raw_dataset, args.mode, 0.20)
 
@@ -291,9 +340,10 @@ if __name__ == '__main__':
     train_gen = train_gen.flow(x=train_x,
                                y=train_y,
                                batch_size=BATCH_SIZE,
-                               save_to_dir="augmented",
-                               save_prefix="aug_",
                                )
+    # save_to_dir="augmented",
+    # save_prefix="aug_",
+
     valid_gen = valid_gen.flow(x=val_x, y=val_y, batch_size=BATCH_SIZE)
 
     print(train_x.shape)
@@ -313,8 +363,8 @@ if __name__ == '__main__':
         model_checkpoint_callback = create_checkpoint_callback()
         callbacks.append(model_checkpoint_callback)
 
+    # pass callbacks=callbacks to obtain train and validation metrics
     model.fit(x=train_gen, validation_data=valid_gen, steps_per_epoch=len(train_gen), validation_steps=len(valid_gen),
               epochs=30, verbose=2)
-    # , callbacks=[tensorboard_callback]
+    # , callbacks
     # model.save(Path("final_models/class_model"))
-

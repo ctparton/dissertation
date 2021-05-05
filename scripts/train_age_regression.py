@@ -15,18 +15,25 @@ from datetime import date
 from tensorflow.keras.preprocessing import image
 import argparse
 
+
 def get_param_args():
+    """
+    Retrieves the command line arguments (or default values) to modify model training
+    :return: An object containing the command line arguments
+    """
     parser = argparse.ArgumentParser(description='Pass hyperparameter arguments')
     parser.add_argument("--b", default=64, help="This is the batch size")
     parser.add_argument("--layers", default=8, help="This is the trainable layers")
     parser.add_argument("--lr", default=0.0001, help="This is the learning rate")
     parser.add_argument("--type", default='VGG16', help="This is the model architecture (VGG16 or VGGFACE)")
-    parser.add_argument("--mode", default="finetune", help="Pass 'finetune' for ChaLearn training or 'pretrain for IMDB-wiki")
+    parser.add_argument("--mode", default="finetune",
+                        help="Pass 'finetune' for ChaLearn training or 'pretrain for IMDB-wiki")
     args = parser.parse_args()
     if is_valid_arch(args.type) and is_valid_training_strategy(args.mode):
         return args
     else:
         return None
+
 
 def is_valid_arch(arch_type):
     """
@@ -39,6 +46,7 @@ def is_valid_arch(arch_type):
         raise ValueError("'type' must be one of %r." % valid_types)
     return True
 
+
 def is_valid_training_strategy(training_mode):
     """
     Checks if either IMDB-Wiki (pre-train) or ChaLearn is selected (finetune_
@@ -50,16 +58,30 @@ def is_valid_training_strategy(training_mode):
         raise ValueError("'mode' must be one of %r." % valid_types)
     return True
 
-def plotImages(images_arr):
-   fig, axes = plt.subplots(1, 10, figsize=(20, 20))
-   axes = axes.flatten()
-   for img, ax in zip(images_arr, axes):
+
+def plot_images(images_arr):
+    """
+    Plots a batch of images for testing purposes
+
+    :param images_arr: NumPy array of images to plot
+    :return: void
+    """
+    fig, axes = plt.subplots(1, 10, figsize=(20, 20))
+    axes = axes.flatten()
+    for img, ax in zip(images_arr, axes):
         ax.imshow(img)
         ax.axis('off')
-   plt.tight_layout()
-   plt.show()
+    plt.tight_layout()
+    plt.show()
+
 
 def load_data(mode):
+    """
+    Loads the datasets from .csv files into pandas for processing and cleaning
+
+    :param mode: determines if the IMDb-wiki data should be converted or the Chalearn data
+    :return: pandas dataframe containing train and validation data
+    """
     if mode == 'pretrain':
         if Path('imdb_wiki_data.pkl').is_file():
             print("Reading in data!")
@@ -68,10 +90,10 @@ def load_data(mode):
         else:
             BASE_LABEL_PATH = Path("../data/imdb_wiki_processed")
             BASE_IMAGE_PATH = Path('../data/process_new/imdb_wiki_processed/loose_crop')
-            result = pd.read_csv(BASE_PATH / 'imdb_wiki_labels.csv')
-            result = labels.astype({"image": 'string'})
+            result = pd.read_csv(BASE_LABEL_PATH / 'imdb_wiki_labels.csv')
+            result = result.astype({"image": 'string'})
             result['age'] = result['age'].astype(float)
-            result["imagepath"] = str(BASE_IMAGE_PATH) + "/" + labels['image']
+            result["imagepath"] = str(BASE_IMAGE_PATH) + "/" + result['image']
             result = result.dropna()
             train = result[result['partition'] == 'train']
             val = result[result['partition'] == 'valid']
@@ -105,8 +127,14 @@ def load_data(mode):
     test = test.dropna()
     return (train, val, test)
 
-def construct_model(type):
-    if type == 'VGG16':
+
+def construct_model(arch):
+    """
+    Constructs and returns a Keras Sequential Model instance
+    :param arch: architecture to construct
+    :return: Keras Sequential model
+    """
+    if arch == 'VGG16':
         vgg16_model = VGG16(weights='aug_loose_cropped_model.17-6.47.h5', classes=1)
         # vgg16_model.summary()
         model = keras.Sequential()
@@ -133,7 +161,7 @@ def construct_model(type):
             layer.trainable = True
             print(f"{layer}: {layer.trainable}")
         return model
-    elif type == 'VGGFACE':
+    elif arch == 'VGGFACE':
         # https://medium.com/analytics-vidhya/face-recognition-with-vgg-face-in-keras-96e6bc1951d5
         vggface = tf.keras.models.Sequential()
         vggface.add(ZeroPadding2D((1, 1), input_shape=(224, 224, 3)))
@@ -187,29 +215,42 @@ def construct_model(type):
         vggface.pop()
         vggface.add(Flatten())
         vggface.add(Dense(units=1))
-        for layer in vvgface.layers:
+        for layer in vggface.layers:
             layer.trainable = False
         # Set the last 8 layers to be trainable
-        for layer in vvgface.layers[14:]:
+        for layer in vggface.layers[14:]:
             layer.trainable = True
             print(f"{layer}: {layer.trainable}")
-        print(vvgface.summary())
+        print(vggface.summary())
         return vggface
     else:
         return None
 
+
 def create_checkpoint_callback():
+    """
+    Creates a checkpoint, to save the best weights found during training
+
+    :return: Keras model checkpoint callback
+    """
     return tf.keras.callbacks.ModelCheckpoint(
-    filepath='aug_loose_cropped_model.{epoch:02d}-{val_loss:.2f}.h5',
-    save_weights_only=True,
-    monitor='val_loss',
-    mode='min',
-    save_best_only=True)
+        filepath='aug_loose_cropped_model.{epoch:02d}-{val_loss:.2f}.h5',
+        save_weights_only=True,
+        monitor='val_loss',
+        mode='min',
+        save_best_only=True)
+
 
 def evaluate_on_test(model):
+    """
+    Evaluates the train model on the ChaLearn test set
+    :param model: model to evaluate
+    :return: results indicating MAE test set performance
+    """
     results = model.evaluate(test_gen, steps=len(test_gen))
     results = {out: results[i] for i, out in enumerate(model.metrics_names)}
     return results
+
 
 if __name__ == '__main__':
     args = get_param_args()
@@ -235,7 +276,8 @@ if __name__ == '__main__':
                                                 target_size=(224, 224), batch_size=BATCH_SIZE, shuffle=False)
         y_col = 'mean'
 
-    train_gen = ImageDataGenerator(preprocessing_function=preprocess_input, horizontal_flip=True, width_shift_range=0.1, height_shift_range=0.1, zoom_range=[0.9,1.1], rotation_range=10)
+    train_gen = ImageDataGenerator(preprocessing_function=preprocess_input, horizontal_flip=True, width_shift_range=0.1,
+                                   height_shift_range=0.1, zoom_range=[0.9, 1.1], rotation_range=10)
     valid_gen = ImageDataGenerator(preprocessing_function=preprocess_input)
 
     train_gen = train_gen.flow_from_dataframe(dataframe=train, x_col="imagepath", y_col=y_col, class_mode="raw",
@@ -245,6 +287,7 @@ if __name__ == '__main__':
 
     # Plot training samples as a check
     # imgs, labels = next(train_gen)
+    # plot_images(imgs)
 
     model = construct_model(args.type)
 
@@ -256,11 +299,11 @@ if __name__ == '__main__':
     # Recompile model with new learning rate and last 8 layers trainable
     model.compile(optimizer=tf.keras.optimizers.Adam(LR), loss="mean_absolute_error", metrics=[MeanAbsoluteError()])
     print(model.summary())
+
+    # pass callbacks=callbacks to obtain train and validation metrics
     model.fit(x=train_gen, steps_per_epoch=len(train_gen), validation_data=valid_gen, validation_steps=len(valid_gen),
               epochs=50, verbose=2)
-    # callbacks=[tensorboard_callback]
+
+    # callbacks
     print(f"test results {evaluate_on_test(model)}")
     # model.save(Path("final_models/regression_model"))
-
-
-
